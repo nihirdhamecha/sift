@@ -54,6 +54,8 @@ Live (real Jev) scores need **all** of: `TYPESAFE_API_KEY` set, `DEMO_PASSWORD` 
    - **Follow-up action:** `Too Many Requests (429)`
    - Save, then **Publish**. That allows a 100-resume run in about 3–4 minutes per person, and the browser already backs off on 429s.
 
+**Auto-deploys:** this repo is connected to the Vercel project, so every push to `main` deploys to production, and pushes to other branches get a preview URL. Preview deployments only get mock scores unless you also add the env vars to the Preview environment.
+
 To try the Vercel runtime locally: `npm i -g vercel`, then `vercel link` and `vercel dev` from this folder (put the env vars in `.env` or `vercel env pull`).
 
 ### For recruiters: starting Sift on a Mac (no technical knowledge needed)
