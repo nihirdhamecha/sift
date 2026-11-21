@@ -1,0 +1,10 @@
+private/
+results/
+resumes/*.pdf
+.env
+__pycache__/
+web/node_modules/
+web/dist/
+*.tsbuildinfo
+.venv/
+.vercel

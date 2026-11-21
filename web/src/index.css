@@ -1,0 +1,56 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Sift brand: paper #FAFAF7, ink #111111, signal indigo #4F46E5, shortlisted green #16A34A, not-this-time grey #9CA3AF. */
+:root { color-scheme: light; }
+
+@layer components {
+  .card { @apply rounded-2xl border border-zinc-900/10 bg-white shadow-[0_1px_2px_rgba(16,24,40,0.04)]; }
+  .btn { @apply inline-flex items-center justify-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition
+         focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60
+         disabled:cursor-not-allowed disabled:opacity-40; }
+  .btn-primary { @apply btn bg-[#111111] font-semibold text-white shadow-sm shadow-zinc-900/20 hover:bg-zinc-700 disabled:shadow-none; }
+  .btn-ghost { @apply btn border border-zinc-900/15 bg-white text-zinc-800 hover:border-zinc-900/30 hover:bg-zinc-50; }
+  .input { @apply w-full rounded-xl border border-zinc-900/15 bg-white px-3.5 py-2.5 text-sm text-zinc-900 placeholder:text-zinc-400
+           focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20; }
+  .label { @apply mb-1.5 block text-xs font-medium uppercase tracking-wide text-zinc-500; }
+}
+
+@keyframes reveal { from { opacity: 0; filter: blur(6px); transform: translateY(2px); } to { opacity: 1; filter: none; transform: none; } }
+.animate-reveal { animation: reveal .6s ease-out both; }
+@media (prefers-reduced-motion: reduce) { .animate-reveal { animation: none; } }
+
+/* ---------------------------------------------------------------- landing */
+.bg-grid {
+  background-image: linear-gradient(to right, rgb(24 24 27 / 0.05) 1px, transparent 1px),
+                    linear-gradient(to bottom, rgb(24 24 27 / 0.05) 1px, transparent 1px);
+  background-size: 56px 56px;
+  -webkit-mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, black 30%, transparent 75%);
+          mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, black 30%, transparent 75%);
+}
+@keyframes bf-sweep { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@keyframes bf-fade-up { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+@keyframes bf-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes bf-grow { from { width: 0; } }
+@keyframes bf-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+@keyframes bf-swap { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+.bf-sweep { transform-origin: left; animation: bf-sweep .9s cubic-bezier(.7, 0, .2, 1) 1.1s both; }
+.bf-fade-up { animation: bf-fade-up .7s cubic-bezier(.2, .7, .2, 1) both; }
+.bf-fade { animation: bf-fade .6s ease-out both; }
+.bf-grow { animation: bf-grow 1.2s cubic-bezier(.2, .7, .2, 1) both; }
+.bf-float { animation: bf-float 6s ease-in-out infinite; }
+.bf-swap { animation: bf-swap .45s cubic-bezier(.2, .7, .2, 1) both; }
+@media (prefers-reduced-motion: reduce) {
+  .bf-sweep, .bf-fade-up, .bf-fade, .bf-grow, .bf-float, .bf-swap { animation: none !important; }
+}
+
+/* ---------------------------------------------------------------- reveal: cards settle into ranked order */
+@keyframes sift-settle {
+  from { transform: translate(var(--sx, 0), var(--sy, 24px)) rotate(var(--sr, 0deg)); opacity: .35; }
+  to   { transform: none; opacity: 1; }
+}
+@keyframes sift-glow { from { box-shadow: 0 0 0 0 rgb(22 163 74 / .35); } to { box-shadow: 0 0 0 12px rgb(22 163 74 / 0); } }
+.sift-settle { animation: sift-settle .9s cubic-bezier(.2, .8, .2, 1) both; }
+.sift-rise { animation: sift-settle 1s cubic-bezier(.2, .9, .2, 1) both, sift-glow .9s ease-out 1s both; }
+@media (prefers-reduced-motion: reduce) { .sift-settle, .sift-rise { animation: none; } }

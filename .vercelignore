@@ -1,0 +1,11 @@
+.venv
+.env
+web/node_modules
+web/dist
+private
+results
+resumes
+tests
+docs
+__pycache__
+*.pyc

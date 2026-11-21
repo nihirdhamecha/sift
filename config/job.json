@@ -1,0 +1,21 @@
+{
+  "_note": "PLACEHOLDER job description. Replace role, description and must_haves with the real JD before running on your 100 resumes.",
+  "role": "Product Manager",
+  "description": "Product Manager for a consumer app. Owns a product area end to end: discovery, writing specs, working with engineering and design, launching to production, and tracking impact with data. Needs 2-5 years of product management experience, hands-on use of data (SQL or analytics tools) to make decisions, and experience shipping features to real users.",
+  "shortlist_question": "Based only on `resume`, should this candidate be shortlisted for a first interview for the role described in `job`?",
+  "must_haves": [
+    {
+      "key": "shipped_to_production",
+      "question": "Does `resume` show the candidate owning or shipping a product or feature to real users in production?"
+    },
+    {
+      "key": "relevant_experience",
+      "question": "Does `resume` show at least 2 years of product management experience, as asked for in `job`?"
+    },
+    {
+      "key": "data_driven",
+      "question": "Does `resume` show the candidate using data, metrics or experiments to make product decisions?"
+    }
+  ],
+  "threshold": 0.7
+}
