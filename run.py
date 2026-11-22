@@ -22,6 +22,7 @@ from pathlib import Path
 
 from shortlister.jev import JevScorer
 from shortlister.parse import pdf_to_text
+from shortlister.policy import decide
 from shortlister.redact import redact
 
 ROOT = Path(__file__).parent
@@ -82,8 +83,9 @@ def main() -> None:
             print(f"[{i}/{len(pdfs)}] {rid}: could not parse, sent to human review")
             continue
         s = scorer.score(payload)
+        must = {k: v for k, v in s.items() if k != "shortlist"}
         row = {"id": rid, "probability": round(s["shortlist"], 3),
-               "decision": "GO" if s["shortlist"] >= threshold else "NO-GO"}
+               "decision": decide(s["shortlist"], must, threshold)}
         row.update({k: round(v, 3) for k, v in s.items() if k != "shortlist"})
         scores.append(row)
         print(f"[{i}/{len(pdfs)}] {rid}: {row['decision']} ({row['probability']})")

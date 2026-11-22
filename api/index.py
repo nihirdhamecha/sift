@@ -31,11 +31,11 @@ from pydantic import BaseModel, Field, ValidationError, field_validator  # noqa:
 
 from shortlister.jev import MODEL, JevScorer  # noqa: E402
 from shortlister.parse import pdf_to_text  # noqa: E402
+from shortlister.policy import MUST_HAVE_CUTOFF, NO_GO, REVIEW, decide, failed_must_haves  # noqa: E402
 from shortlister.redact import REDACTION_MODE, redact  # noqa: E402
 
 MAX_BYTES = 4 * 1024 * 1024  # Vercel caps request bodies at 4.5 MB
 MAX_FILES = 100              # enforced by the client; reported here so both agree
-CHIP_CUTOFF = 0.5
 DEFAULT_RETRY_AFTER = 20
 
 log = logging.getLogger("sift")
@@ -203,20 +203,28 @@ async def score(file: UploadFile = File(...), job: str = Form(...)):
         log.warning("jev %s", code)
         raise err(status, code, detail, **extra) from None
 
-    p = round(probs["shortlist"], 3)
+    mh = {m["key"]: probs[m["key"]] for m in j["must_haves"]}
+    decision = decide(probs["shortlist"], mh, j["threshold"])
+    failed = failed_must_haves(mh)
+    if decision == REVIEW:
+        reason = "Strong overall match, but one requirement isn't shown. Worth a human look."
+    elif decision == NO_GO and probs["shortlist"] >= j["threshold"]:
+        reason = f"Strong overall match, but {len(failed)} requirements aren't shown."
+    else:
+        reason = None
     return {
         **base,
-        "probability": p,
-        "decision": "GO" if p >= j["threshold"] else "NO-GO",
-        "must_haves": {m["key"]: {"prob": round(probs[m["key"]], 3), "pass": probs[m["key"]] >= CHIP_CUTOFF}
-                       for m in j["must_haves"]},
+        "probability": round(probs["shortlist"], 3),
+        "decision": decision,
+        "must_haves": {k: {"prob": round(p, 3), "pass": p >= MUST_HAVE_CUTOFF} for k, p in mh.items()},
+        "failed_must_haves": failed,
         "needs_human_review": False,
-        "reason": None,
+        "reason": reason,
     }
 
 
 def _review(rid: str, is_mock: bool, reason: str) -> dict:
-    return {"id": rid, "mock": is_mock, "probability": None, "decision": "REVIEW", "must_haves": {},
+    return {"id": rid, "mock": is_mock, "probability": None, "decision": REVIEW, "must_haves": {}, "failed_must_haves": [],
             "redacted": None, "sections_found": [], "warnings": [], "redactions": {}, "name_guess": "",
             "needs_human_review": True, "reason": reason}
 

@@ -9,8 +9,8 @@ export interface Health {
 
 /** One /api/score response. name_guess stays in React state and is only rendered after "Reveal names". */
 export interface ScoreResult {
-  id: string; mock: boolean; probability: number | null; decision: "GO" | "NO-GO" | "REVIEW";
-  must_haves: Record<string, { prob: number; pass: boolean }>; redacted: Record<string, unknown> | null;
+  id: string; mock: boolean; probability: number | null; decision: "GO" | "NO-GO" | "HUMAN REVIEW";
+  must_haves: Record<string, { prob: number; pass: boolean }>; failed_must_haves: string[]; redacted: Record<string, unknown> | null;
   sections_found: string[]; warnings: string[]; redactions: Record<string, number>;
   name_guess: string; needs_human_review: boolean; reason: string | null;
 }
@@ -22,7 +22,7 @@ export interface Item {
 }
 
 export interface ResultRow {
-  id: string; probability: number | null; decision: "GO" | "NO-GO" | "REVIEW" | "ERROR";
+  id: string; probability: number | null; decision: "GO" | "NO-GO" | "HUMAN REVIEW" | "ERROR";
   must_haves: Record<string, { prob: number; pass: boolean }>; reason: string | null;
   profile?: { title: string | null; company: string | null; years: number | null } | null;
 }

@@ -156,7 +156,7 @@ def test_not_a_pdf_is_415(client):
 def test_parse_failure_goes_to_human_review(client):
     r = client.post("/api/score", files={"file": ("r.pdf", b"%PDF-1.4 garbage", "application/pdf")}, data={"job": json.dumps(JOB)})
     assert r.status_code == 200
-    assert r.json()["needs_human_review"] is True and r.json()["decision"] == "REVIEW" and r.json()["reason"]
+    assert r.json()["needs_human_review"] is True and r.json()["decision"] == "HUMAN REVIEW" and r.json()["reason"]
 
 
 def test_bad_job_is_422(client):
@@ -235,3 +235,43 @@ def test_jd_rejects_other_files(client):
     assert jd(client, "jd.png", b"\x89PNG....", "image/png").status_code == 415
     assert jd(client, "jd.txt", b"   ", "text/plain").json()["code"] == "empty"
     assert jd(client, "jd.pdf", b"%PDF-1.4 broken", "application/pdf").status_code == 422
+
+
+# ------------------------------------------------------------------ decision policy
+from shortlister.policy import decide  # noqa: E402
+
+
+@pytest.mark.parametrize("shortlist,must,expected", [
+    (0.80, {"a": 0.9, "b": 0.6}, "GO"),                   # high and every must-have met
+    (0.70, {"a": 0.5, "b": 0.5}, "GO"),                   # boundaries are inclusive
+    (0.80, {}, "GO"),                                     # no must-haves: shortlist alone
+    (0.85, {"a": 0.9, "b": 0.3}, "HUMAN REVIEW"),         # high but exactly one fails
+    (0.85, {"a": 0.2, "b": 0.3}, "NO-GO"),                # two fail
+    (0.60, {"a": 0.9, "b": 0.9}, "NO-GO"),                # below threshold, even if all met
+    (0.69, {"a": 0.2}, "NO-GO"),
+])
+def test_policy(shortlist, must, expected):
+    assert decide(shortlist, must, 0.7) == expected
+
+
+def test_api_applies_policy(client, monkeypatch):
+    monkeypatch.setenv("TYPESAFE_API_KEY", "ts_x")
+    job = {**JOB, "must_haves": JOB["must_haves"] + [{"key": "sql", "question": "Knows SQL"}]}
+
+    def run(probs):
+        class S:
+            def score(self, _):
+                return probs
+        monkeypatch.setattr(sift, "make_scorer", lambda j, mock: S())
+        return score(client, SAMPLES[0], job=job).json()
+
+    assert run({"shortlist": 0.9, "pm_exp": 0.8, "sql": 0.7})["decision"] == "GO"
+    r = run({"shortlist": 0.9, "pm_exp": 0.8, "sql": 0.2})
+    assert r["decision"] == "HUMAN REVIEW" and r["failed_must_haves"] == ["sql"] and r["needs_human_review"] is False
+    assert run({"shortlist": 0.9, "pm_exp": 0.1, "sql": 0.2})["decision"] == "NO-GO"
+    assert run({"shortlist": 0.5, "pm_exp": 0.9, "sql": 0.9})["decision"] == "NO-GO"
+
+
+def test_unreadable_file_is_human_review(client):
+    r = client.post("/api/score", files={"file": ("r.pdf", b"%PDF-1.4 garbage", "application/pdf")}, data={"job": json.dumps(JOB)}).json()
+    assert r["decision"] == "HUMAN REVIEW" and r["needs_human_review"] is True and r["probability"] is None

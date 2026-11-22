@@ -118,6 +118,11 @@ export default function Results({ data, seen, onReveal, onRerun }: {
                       : [p?.title && (p.company ? `${p.title} at ${p.company}` : p.title), years(p?.years) && `${years(p?.years)} experience`].filter(Boolean).join(" · ") || "No work experience found"}
                     {who && <span className="animate-reveal"> · {who.file}</span>}
                   </div>
+                  {verdict === "borderline" && (
+                    <div className="mt-1 text-sm text-indigo-700">
+                      Not shown: {reqs.filter((q) => r.must_haves[q.key] && !r.must_haves[q.key].pass).map((q) => q.text).join(", ")}
+                    </div>
+                  )}
                 </div>
                 {r.probability !== null && (
                   <div className="w-36">

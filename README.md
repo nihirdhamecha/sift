@@ -67,7 +67,15 @@ To try the Vercel runtime locally: `npm i -g vercel`, then `vercel link` and `ve
 
 Then follow the steps on screen: **Describe the job** (type it, or click **Upload JD** for a PDF, Word or text file) **→ Add resumes → See shortlist**. No resumes handy? Click **Try with sample resumes**.
 
-**Borderline** means the score is within 5 points of the cut-off: Jev's scores vary by about ±2 points when it reads the same resume twice, so these deserve a quick human look.
+**How the decision is made** ([shortlister/policy.py](shortlister/policy.py)). One overall score is too vague, so every requirement is its own yes/no check:
+
+| Decision | Rule | Shown as |
+|---|---|---|
+| **GO** | overall score ≥ the cut-off **and** every requirement ≥ 0.5 | Shortlisted |
+| **HUMAN REVIEW** | overall score ≥ the cut-off but **exactly one** requirement < 0.5 | Borderline, naming the missing requirement |
+| **NO-GO** | anything else: overall score below the cut-off, or two or more requirements missing | Not this time |
+
+Files that can't be read are also HUMAN REVIEW ("Read yourself"). The command-line `run.py` uses the same rule.
 
 ![Landing page](docs/screenshots/landing.png)
 ![Shortlist](docs/screenshots/results.png)
