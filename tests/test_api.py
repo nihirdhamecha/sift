@@ -26,8 +26,7 @@ JOB = {
 
 @pytest.fixture(autouse=True)
 def env(monkeypatch):
-    for k in ("TYPESAFE_API_KEY", "DEMO_PASSWORD", "DEMO_MODE"):
-        monkeypatch.delenv(k, raising=False)
+    monkeypatch.delenv("TYPESAFE_API_KEY", raising=False)
 
 
 @pytest.fixture
@@ -35,9 +34,14 @@ def client():
     return TestClient(sift.app)
 
 
-def score(client, path: Path, job=JOB, headers=None, mock=False):
+def score(client, path: Path, job=JOB):
     return client.post("/api/score", files={"file": ("resume.pdf", path.read_bytes(), "application/pdf")},
-                       data={"job": json.dumps(job), "mock": str(mock).lower()}, headers=headers or {})
+                       data={"job": json.dumps(job)})
+
+
+class Fake:
+    def score(self, _):
+        return {"shortlist": 0.9, "pm_exp": 0.8}
 
 
 def identity(path: Path) -> dict:
@@ -117,44 +121,23 @@ def test_resume_content_never_logged(client, caplog):
 # ------------------------------------------------------------------ modes
 def test_health_never_returns_key(client, monkeypatch):
     monkeypatch.setenv("TYPESAFE_API_KEY", "ts_secret_123456")
-    monkeypatch.setenv("DEMO_PASSWORD", "pw-secret")
     r = client.get("/api/health")
     assert r.json()["mode"] == "live" and r.json()["has_key"] is True
-    assert "ts_secret" not in r.text and "pw-secret" not in r.text
+    assert "ts_secret" not in r.text
 
 
-def test_no_key_or_no_password_means_mock(client, monkeypatch):
+def test_no_key_means_marked_mock(client):
     assert client.get("/api/health").json()["mode"] == "mock"
-    monkeypatch.setenv("TYPESAFE_API_KEY", "ts_x")
-    assert client.get("/api/health").json()["mode"] == "mock"  # DEMO_PASSWORD unset: live disabled
-    assert score(client, SAMPLES[0], headers={"X-Sift-Password": "anything"}).json()["mock"] is True
+    assert score(client, SAMPLES[0]).json()["mock"] is True
 
 
-def test_demo_mode_forces_mock(client, monkeypatch):
+def test_open_to_all_with_a_key(client, monkeypatch):
+    """No password or demo switch: with a key, every request is scored live."""
     monkeypatch.setenv("TYPESAFE_API_KEY", "ts_x")
+    monkeypatch.setenv("DEMO_MODE", "true")       # old switches are ignored
     monkeypatch.setenv("DEMO_PASSWORD", "pw")
-    monkeypatch.setenv("DEMO_MODE", "true")
-    assert client.get("/api/health").json()["mode"] == "mock"
-    assert score(client, SAMPLES[0], headers={"X-Sift-Password": "pw"}).json()["mock"] is True
-
-
-def test_wrong_password_is_rejected(client, monkeypatch):
-    monkeypatch.setenv("TYPESAFE_API_KEY", "ts_x")
-    monkeypatch.setenv("DEMO_PASSWORD", "pw")
-    r = score(client, SAMPLES[0], headers={"X-Sift-Password": "nope"})
-    assert r.status_code == 401 and r.json()["code"] == "bad_password"
-    assert score(client, SAMPLES[0]).json()["mock"] is True  # no password: mock, not an error
-
-
-def test_right_password_goes_live(client, monkeypatch):
-    monkeypatch.setenv("TYPESAFE_API_KEY", "ts_x")
-    monkeypatch.setenv("DEMO_PASSWORD", "pw")
-
-    class Fake:
-        def score(self, _):
-            return {"shortlist": 0.9, "pm_exp": 0.8}
     monkeypatch.setattr(sift, "make_scorer", lambda job, mock: Fake() if not mock else pytest.fail("mocked"))
-    body = score(client, SAMPLES[0], headers={"X-Sift-Password": "pw"}).json()
+    body = score(client, SAMPLES[0]).json()
     assert body["mock"] is False and body["decision"] == "GO" and body["must_haves"]["pm_exp"]["pass"] is True
 
 
@@ -184,24 +167,22 @@ def test_rate_limit_returns_retry_after(client, monkeypatch):
     import httpx2
     from typesafe_sdk import TypeSafeRateLimitError
     monkeypatch.setenv("TYPESAFE_API_KEY", "ts_x")
-    monkeypatch.setenv("DEMO_PASSWORD", "pw")
 
     class Busy:
         def score(self, _):
             raise TypeSafeRateLimitError(429, {}, httpx2.Headers({"retry-after": "7"}))
     monkeypatch.setattr(sift, "make_scorer", lambda job, mock: Busy())
-    r = score(client, SAMPLES[0], headers={"X-Sift-Password": "pw"})
+    r = score(client, SAMPLES[0])
     assert r.status_code == 429 and r.json()["retry_after"] == 7 and r.headers["Retry-After"] == "7"
 
 
 def test_missing_key_is_visible(client, monkeypatch):
     monkeypatch.setenv("TYPESAFE_API_KEY", "ts_x")
-    monkeypatch.setenv("DEMO_PASSWORD", "pw")
 
     def boom(job, mock):
         raise SystemExit("no key")
     monkeypatch.setattr(sift, "make_scorer", boom)
-    r = score(client, SAMPLES[0], headers={"X-Sift-Password": "pw"})
+    r = score(client, SAMPLES[0])
     assert r.status_code == 503 and r.json()["code"] == "missing_key"
 
 
@@ -211,3 +192,46 @@ def test_leak_detector_catches_raw_text(path):
     found = leaks(pdf_to_text(path), identity(path))
     assert any(t in found for t in identity(path)["name_tokens"]) and identity(path)["emails"][0] in found
     assert identity(path)["phones"][0] in found
+
+
+# ------------------------------------------------------------------ job description upload
+def _docx(paragraphs: list[str]) -> bytes:
+    import io
+    import zipfile
+    body = "".join(f"<w:p><w:r><w:t>{p}</w:t></w:r></w:p>" for p in paragraphs)
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as z:
+        z.writestr("[Content_Types].xml", "<Types/>")
+        z.writestr("word/document.xml", f'<w:document xmlns:w="x"><w:body>{body}</w:body></w:document>')
+    return buf.getvalue()
+
+
+def jd(client, name, data, ctype="application/octet-stream"):
+    return client.post("/api/jd", files={"file": (name, data, ctype)})
+
+
+def test_jd_from_pdf(client):
+    r = jd(client, "jd.pdf", SAMPLES[0].read_bytes(), "application/pdf")
+    assert r.status_code == 200 and "Product Manager" in r.json()["text"]
+
+
+def test_jd_from_docx(client):
+    r = jd(client, "jd.docx", _docx(["Senior PM, Payments", "Own the checkout roadmap &amp; growth."]))
+    assert r.status_code == 200
+    assert r.json()["text"] == "Senior PM, Payments\nOwn the checkout roadmap & growth."
+
+
+def test_jd_from_text(client):
+    r = jd(client, "jd.txt", "Sales Manager\n\n\n\nLead a team of six.".encode(), "text/plain")
+    assert r.json() == {"text": "Sales Manager\n\nLead a team of six.", "truncated": False}
+
+
+def test_jd_long_text_is_truncated(client):
+    r = jd(client, "jd.txt", ("word " * 6000).encode(), "text/plain")
+    assert r.json()["truncated"] is True and len(r.json()["text"]) == 20000
+
+
+def test_jd_rejects_other_files(client):
+    assert jd(client, "jd.png", b"\x89PNG....", "image/png").status_code == 415
+    assert jd(client, "jd.txt", b"   ", "text/plain").json()["code"] == "empty"
+    assert jd(client, "jd.pdf", b"%PDF-1.4 broken", "application/pdf").status_code == 422

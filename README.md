@@ -24,14 +24,17 @@ browser ──(one PDF + job)──▶ /api/score: parse → redact → Jev ─�
 
 | Endpoint | Does |
 |---|---|
-| `GET /api/health` | `mode` (`live`/`mock`), `has_key`, `password_required`, `demo_mode`, `redaction`, limits. Never the key. |
-| `POST /api/score` | Multipart: `file` (one PDF, ≤ 4 MB), `job` (JSON), optional `mock`. Header `X-Sift-Password` for live scores. Returns `{id, probability, decision, must_haves, redacted, sections_found, warnings, name_guess, needs_human_review, mock}`. |
+| `GET /api/health` | `mode` (`live`/`mock`), `has_key`, `model`, `redaction`, limits. Never the key. |
+| `POST /api/jd` | Multipart `file`: a job description as PDF, Word (.docx) or text, ≤ 4 MB. Returns `{text, truncated}` for the description box. |
+| `POST /api/score` | Multipart: `file` (one PDF, ≤ 4 MB) and `job` (JSON). Returns `{id, probability, decision, must_haves, redacted, sections_found, warnings, name_guess, needs_human_review, mock}`. |
 
-Errors are explicit: `413` file over 4 MB · `415` not a PDF · `401` wrong password · `429` Jev rate limit with `retry_after` (and a `Retry-After` header) · `503` key missing · unreadable PDFs come back as `needs_human_review` with a reason. The browser sends at most **5 resumes in parallel**, rejects files over 4 MB and runs over 100 files before uploading, and retries 429s with backoff (the server's hint, then doubling, up to 4 tries).
+Errors are explicit: `413` file over 4 MB · `415` not a PDF · `429` Jev rate limit with `retry_after` (and a `Retry-After` header) · `503` key missing · unreadable PDFs come back as `needs_human_review` with a reason. The browser sends at most **5 resumes in parallel**, rejects files over 4 MB and runs over 100 files before uploading, and retries 429s with backoff (the server's hint, then doubling, up to 4 tries).
 
-### Live vs mock
+### Open access
 
-Live (real Jev) scores need **all** of: `TYPESAFE_API_KEY` set, `DEMO_PASSWORD` set, `DEMO_MODE` not `true`, and the right password typed into **Settings** (kept in memory for that tab). Otherwise every response is mock, marked `"mock": true`, and the app shows **MOCK SCORES - NOT REAL**. Off localhost, the app also shows **Demo only. Don't upload real resumes.**
+Sift is open to everyone: no login, no password. Whenever the server has `TYPESAFE_API_KEY`, every request gets real Jev scores, **billed to that key**, so the firewall rate limit below is the only thing standing between the public and your Jev credits. Add it.
+
+With no key (for example on your laptop without `.env`), the app still works but every response is marked `"mock": true` and the page shows **MOCK SCORES - NOT REAL**, so made-up scores can't be mistaken for real ones.
 
 ### Deploy to Vercel
 
@@ -42,29 +45,27 @@ Live (real Jev) scores need **all** of: `TYPESAFE_API_KEY` set, `DEMO_PASSWORD` 
    |---|---|
    | `TYPESAFE_API_KEY` | your key from console.typesafe.ai (mark it **Sensitive**) |
    | `JEV_MODEL` | `jev-1.13.0` (optional; pinned by default) |
-   | `DEMO_MODE` | `true` for a public mock-only demo; leave unset to allow live scores |
-   | `DEMO_PASSWORD` | a long random string you share with testers. **Unset = live mode disabled**, app runs in mock |
    | `BLINDFOLD_REDACTION` | optional: `name` (default) or `full` |
 
-3. **Deploy.** Open the site, go to **Settings**, enter the password, and run the sample resumes.
-4. **Add the firewall rate limit** (the server is stateless, so it can't count requests itself). **Project → Firewall → Configure → + New Rule**:
+3. **Deploy.** Open the site and click **Try with sample resumes**.
+4. **Add the firewall rate limit.** The site is open and the server is stateless, so this is what caps spending on your Jev key. **Project → Firewall → Configure → + New Rule**:
    - **Name:** `Sift scoring limit`
-   - **If:** `Request Path` · `starts with` · `/api/score`
+   - **If:** `Request Path` · `starts with` · `/api/` (covers `/api/score` and `/api/jd`)
    - **Then:** `Rate Limit` · **Fixed Window** · **60 seconds** · **30 requests** · key: **IP Address**
    - **Follow-up action:** `Too Many Requests (429)`
    - Save, then **Publish**. That allows a 100-resume run in about 3–4 minutes per person, and the browser already backs off on 429s.
 
-**Auto-deploys:** this repo is connected to the Vercel project, so every push to `main` deploys to production, and pushes to other branches get a preview URL. Preview deployments only get mock scores unless you also add the env vars to the Preview environment.
+**Auto-deploys:** this repo is connected to the Vercel project, so every push to `main` deploys to production, and pushes to other branches get a preview URL. Preview deployments only get mock scores unless you also add `TYPESAFE_API_KEY` to the Preview environment.
 
-To try the Vercel runtime locally: `npm i -g vercel`, then `vercel link` and `vercel dev` from this folder (put the env vars in `.env` or `vercel env pull`).
+To try the Vercel runtime locally: `npm i -g vercel`, then `vercel link` and `vercel dev` from this folder (put `TYPESAFE_API_KEY` in `.env` or run `vercel env pull`).
 
 ### For recruiters: starting Sift on a Mac (no technical knowledge needed)
 
 1. **Double-click `Start Sift.command`** in this folder. (The first time, macOS may ask you to confirm: right-click the file, choose **Open**, then **Open** again.)
 2. A black window opens and sets things up. Then your browser opens Sift at **http://localhost:8000**. Keep the window open while you use it.
-3. For real scores, `.env` needs `TYPESAFE_API_KEY` and `DEMO_PASSWORD` (ask your IT contact). Enter the password in **Settings**. Until then Sift shows mock scores.
+3. For real scores, `.env` needs `TYPESAFE_API_KEY` (ask your IT contact). Until then Sift shows mock scores.
 
-Then follow the steps on screen: **Describe the job → Add resumes → See shortlist**. No resumes handy? Click **Try with sample resumes**.
+Then follow the steps on screen: **Describe the job** (type it, or click **Upload JD** for a PDF, Word or text file) **→ Add resumes → See shortlist**. No resumes handy? Click **Try with sample resumes**.
 
 **Borderline** means the score is within 5 points of the cut-off: Jev's scores vary by about ±2 points when it reads the same resume twice, so these deserve a quick human look.
 
@@ -77,7 +78,7 @@ Then follow the steps on screen: **Describe the job → Add resumes → See shor
 ```bash
 python3.11 -m venv .venv                     # typesafe-sdk needs Python 3.10+
 .venv/bin/pip install -r requirements-dev.txt
-cp .env.example .env                         # optional: TYPESAFE_API_KEY + DEMO_PASSWORD for live scores
+cp .env.example .env                         # optional: TYPESAFE_API_KEY for live scores
 .venv/bin/python start.py                    # API :8000 + Vite :5173 with hot reload → http://localhost:5173
 .venv/bin/python start.py --build --open     # one server on :8000 (what the Mac launcher runs)
 .venv/bin/python -m pytest tests -q

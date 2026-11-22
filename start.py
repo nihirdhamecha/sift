@@ -63,10 +63,8 @@ def main() -> None:
         print("Installing frontend dependencies (first run)...")
         subprocess.check_call([npm, "install", "--no-audit", "--no-fund"], cwd=WEB)
 
-    key, pw = os.environ.get("TYPESAFE_API_KEY"), os.environ.get("DEMO_PASSWORD")
-    print(f"TYPESAFE_API_KEY: {'set' if key else 'NOT set'} · DEMO_PASSWORD: {'set' if pw else 'NOT set'}")
-    if not (key and pw):
-        print("Real scores need both in .env. Until then Sift runs with MOCK scores.")
+    key = os.environ.get("TYPESAFE_API_KEY")
+    print(f"TYPESAFE_API_KEY: {'set' if key else 'NOT set (Sift will show MOCK scores)'}")
 
     procs: list[subprocess.Popen] = []
     api_cmd = [sys.executable, "-m", "uvicorn", "api.index:app", "--host", "127.0.0.1",

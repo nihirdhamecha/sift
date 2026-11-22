@@ -86,7 +86,7 @@ export default function Upload({ items, health, busy, practice, canRun, onAdd, o
       )}
 
       {!canRun && <Alert kind="warn">Finish describing the job first. <button className="font-medium underline" onClick={onBack}>Go back</button></Alert>}
-      {practice && n > 0 && !busy && <p className="text-right text-sm text-amber-700">Practice mode is on: scores will be made up.</p>}
+      {practice && n > 0 && !busy && <p className="text-right text-sm text-amber-700">This server has no AI key: scores will be made up.</p>}
 
       <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-between">
         <button className="btn-ghost" onClick={onBack} disabled={busy}>← Back to job</button>

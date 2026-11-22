@@ -21,7 +21,6 @@ function loadJob(): Job {
   try { const s = store.get("bf-job"); if (s) return parseJob(JSON.parse(s)); } catch { /* ignore */ }
   return DEFAULT_JOB;
 }
-const isPublic = typeof window !== "undefined" && !["localhost", "127.0.0.1", "[::1]"].includes(window.location.hostname);
 
 export default function App() {
   const [health, setHealth] = useState<Health | null>(null);
@@ -31,8 +30,6 @@ export default function App() {
   const [tab, setTab] = useState<Tab>("job");
   const [job, setJob] = useState<Job>(loadJob);
   const [runJob, setRunJob] = useState<Job | null>(null);
-  const [practice, setPractice] = useState(true);
-  const [password, setPassword] = useState("");  // memory only
   const [items, setItems] = useState<Item[]>([]);
   const [running, setRunning] = useState(false);
   const [finished, setFinished] = useState(false);
@@ -43,8 +40,7 @@ export default function App() {
   const cancel = useRef(false);
 
   const problems = jobProblems(job);
-  const liveOk = health?.mode === "live";
-  const mock = practice || !liveOk;
+  const mock = health?.mode === "mock";
 
   useEffect(() => {
     api.health().then(setHealth).catch((e: ApiError) => setBootErr(e.message));
@@ -95,10 +91,9 @@ export default function App() {
       setItems((cur) => cur.map((i) => (i.state === "rejected" ? i : { ...i, state: "queued", message: null, result: null })));
     }
     setRunJob(snap); setRunning(true); setFinished(false); cancel.current = false;
-    const fatal = await runQueue(targets, snap, mock, password, patch, () => cancel.current);
+    const fatal = await runQueue(targets, snap, patch, () => cancel.current);
     setRunning(false); setFinished(true);
     if (fatal) {
-      if (fatal.code === "bad_password") setSettings(true);
       say(fatal.message);
     } else {
       setTab("results");
@@ -113,31 +108,16 @@ export default function App() {
   }
   const showMock = tab === "results" && results ? results.mock : mock;
 
-  const banners = (
-    <>
-      {isPublic && (
-        <div className="relative z-40 bg-[#111111] px-4 py-1.5 text-center text-sm font-medium text-white" role="note">
-          Demo only. Don't upload real resumes.
-        </div>
-      )}
-      {showMock && (
-        <div className="relative z-30 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 border-b border-amber-200 bg-amber-50 px-4 py-2 text-center text-sm text-amber-900" role="status">
-          <span><b>MOCK SCORES - NOT REAL.</b> Practice mode makes up the scores.</span>
-          {liveOk && (
-            <button className="rounded-full border border-amber-300 bg-white px-3 py-0.5 text-amber-900 hover:bg-amber-100"
-              onClick={() => (password ? setPractice(false) : setSettings(true))}>
-              {password ? "Use real scores" : "Enter password for real scores"}
-            </button>
-          )}
-        </div>
-      )}
-    </>
+  // Only ever shown on a server with no AI key (local dev without .env), never on the live site.
+  const banners = showMock && (
+    <div className="relative z-30 border-b border-amber-200 bg-amber-50 px-4 py-2 text-center text-sm text-amber-900" role="status">
+      <b>MOCK SCORES - NOT REAL.</b> This server has no AI key, so scores are made up.
+    </div>
   );
 
   if (welcome) {
     return (
       <>
-        {isPublic && banners}
         <Landing onStart={() => { leaveWelcome(); setTab("job"); window.scrollTo(0, 0); }}
           onDemo={async () => { await demo(); window.scrollTo(0, 0); }} busy={demoBusy} />
       </>
@@ -166,8 +146,7 @@ export default function App() {
         )}
       </main>
       {settings && (
-        <Settings health={health} practice={mock} setPractice={setPractice} password={password}
-          setPassword={setPassword} onClose={() => setSettings(false)} />
+        <Settings health={health} onClose={() => setSettings(false)} />
       )}
     </div>
   );

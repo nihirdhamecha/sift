@@ -24,13 +24,17 @@ async function call<T>(path: string, init?: RequestInit): Promise<T> {
 export const api = {
   health: () => call<Health>("/api/health"),
   /** One resume per request. The filename is not sent: the server only sees the PDF bytes. */
-  score: (file: File, job: Job, mock: boolean, password: string) => {
+  score: (file: File, job: Job) => {
     const fd = new FormData();
     fd.append("file", new Blob([file], { type: "application/pdf" }), "resume.pdf");
     fd.append("job", JSON.stringify(job));
-    fd.append("mock", String(mock));
-    const headers: Record<string, string> = password ? { "X-Sift-Password": password } : {};
-    return call<ScoreResult>("/api/score", { method: "POST", body: fd, headers });
+    return call<ScoreResult>("/api/score", { method: "POST", body: fd });
+  },
+  /** A job description file (PDF, Word or text) -> plain text for the description box. */
+  jd: (file: File) => {
+    const fd = new FormData();
+    fd.append("file", file, file.name);
+    return call<{ text: string; truncated: boolean }>("/api/jd", { method: "POST", body: fd });
   },
 };
 

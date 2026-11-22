@@ -31,7 +31,7 @@ export default function Header({ tab, setTab, disabled, onHelp, onSettings }: {
         </nav>
         <div className="ml-auto flex items-center gap-1">
           <button onClick={onHelp} className="btn !text-zinc-600 hover:!text-zinc-900">Help</button>
-          <button onClick={onSettings} className="btn !text-zinc-600 hover:!text-zinc-900">Settings</button>
+          <button onClick={onSettings} className="btn !text-zinc-600 hover:!text-zinc-900">Privacy</button>
         </div>
       </div>
     </header>

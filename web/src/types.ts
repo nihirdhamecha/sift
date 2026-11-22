@@ -4,8 +4,7 @@ export interface Job {
   must_haves: MustHave[]; threshold: number;
 }
 export interface Health {
-  mode: "live" | "mock"; has_key: boolean; password_required: boolean; demo_mode: boolean;
-  model: string; redaction: "name" | "full"; max_mb: number; max_files: number;
+  mode: "live" | "mock"; has_key: boolean; model: string; redaction: "name" | "full"; max_mb: number; max_files: number;
 }
 
 /** One /api/score response. name_guess stays in React state and is only rendered after "Reveal names". */

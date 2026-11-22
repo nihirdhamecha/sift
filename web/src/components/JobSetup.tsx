@@ -4,6 +4,7 @@ import {
   DEFAULT_JOB, EMPTY_JOB, STRICTNESS, deleteSavedJob, jobProblems, newRequirement, parseJob, saveJob, savedJobs,
   strictnessOf, toQuestion, toRequirement,
 } from "../job";
+import { api, ApiError } from "../api";
 import { Alert, PageTitle } from "./ui";
 
 const EXAMPLES = ["At least 3 years of sales experience", "Has managed a team", "Knows Excel or Google Sheets", "Has a degree in finance or accounting"];
@@ -14,6 +15,8 @@ export default function JobSetup({ job, setJob, next }: { job: Job; setJob: (j: 
   const [saved, setSaved] = useState(savedJobs);
   const [more, setMore] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const jdRef = useRef<HTMLInputElement>(null);
+  const [jdBusy, setJdBusy] = useState(false);
   const problems = jobProblems(job);
   const patch = (p: Partial<Job>) => setJob({ ...job, ...p });
   const level = strictnessOf(job.threshold);
@@ -48,6 +51,21 @@ export default function JobSetup({ job, setJob, next }: { job: Job; setJob: (j: 
     if (fileRef.current) fileRef.current.value = "";
   };
 
+  const uploadJd = async (f?: File) => {
+    if (!f) return;
+    setJdBusy(true); setNote(null);
+    try {
+      const r = await api.jd(f);
+      patch({ description: r.text });
+      setNote({ kind: "success", text: `Added the job description from "${f.name}".${r.truncated ? " It was long, so only the first part was kept." : ""} Check it below.` });
+    } catch (e) {
+      setNote({ kind: "error", text: e instanceof ApiError ? e.message : "We couldn't read that file. Paste the job description instead." });
+    } finally {
+      setJdBusy(false);
+      if (jdRef.current) jdRef.current.value = "";
+    }
+  };
+
   const savedNames = Object.keys(saved);
 
   return (
@@ -69,9 +87,16 @@ export default function JobSetup({ job, setJob, next }: { job: Job; setJob: (j: 
           <input id="role" className="input !text-base" value={job.role} onChange={(e) => patch({ role: e.target.value })} placeholder="For example: Sales Manager" />
         </div>
         <div>
-          <label className="mb-1.5 block font-medium" htmlFor="desc">What does the job involve?</label>
-                    <textarea id="desc" rows={6} className="input !text-base" value={job.description} onChange={(e) => patch({ description: e.target.value })}
-            placeholder="For example: We're looking for a sales manager to lead a team of 6 in our retail business. They should have 3+ years in B2B sales and be comfortable with targets and reporting." />
+          <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
+            <label className="font-medium" htmlFor="desc">What does the job involve?</label>
+            <input ref={jdRef} type="file" hidden accept=".pdf,.docx,.txt,.md,application/pdf,text/plain,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+              onChange={(e) => uploadJd(e.target.files?.[0])} />
+            <button type="button" className="btn-ghost !py-1.5 !text-sm" disabled={jdBusy} onClick={() => jdRef.current?.click()}>
+              {jdBusy ? "Reading…" : "Upload JD (PDF, Word or text)"}
+            </button>
+          </div>
+          <textarea id="desc" rows={6} className="input !text-base" value={job.description} onChange={(e) => patch({ description: e.target.value })}
+            placeholder="Type or paste the job description, or upload it. For example: We're looking for a sales manager to lead a team of 6 in our retail business. They should have 3+ years in B2B sales and be comfortable with targets and reporting." />
         </div>
       </section>
 

@@ -3,7 +3,7 @@ import type { Item, Job, ResultRow, Results, ScoreResult, Seen } from "./types";
 
 export const PARALLEL = 5;
 export const MAX_TRIES = 4;
-const STOP_CODES = new Set(["bad_password", "missing_key", "auth", "bad_job"]);
+const STOP_CODES = new Set(["missing_key", "auth", "bad_job"]);
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -24,10 +24,10 @@ type Patch = (key: string, p: Partial<Item>) => void;
 
 /**
  * Score items one PDF per request, at most PARALLEL at a time. A 429 waits for the server's
- * retry-after hint, then doubles, up to MAX_TRIES. Errors that will hit every file (bad password,
- * missing key) stop the whole run and are returned so the page can explain them once.
+ * retry-after hint, then doubles, up to MAX_TRIES. Errors that will hit every file (missing or
+ * broken key) stop the whole run and are returned so the page can explain them once.
  */
-export async function runQueue(items: Item[], job: Job, mock: boolean, password: string, patch: Patch,
+export async function runQueue(items: Item[], job: Job, patch: Patch,
   cancelled: () => boolean): Promise<ApiError | null> {
   const todo = [...items];
   let fatal: ApiError | null = null;
@@ -37,7 +37,7 @@ export async function runQueue(items: Item[], job: Job, mock: boolean, password:
       if (fatal || cancelled()) { patch(it.key, { state: "queued", message: null }); return; }
       patch(it.key, { state: "reading", message: null });
       try {
-        const r: ScoreResult = await api.score(it.file, job, mock, password);
+        const r: ScoreResult = await api.score(it.file, job);
         patch(it.key, { state: r.needs_human_review ? "review" : "done", result: r, message: r.reason });
         return;
       } catch (e) {
